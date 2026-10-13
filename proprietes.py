@@ -275,13 +275,12 @@ def _delais_entre_soi(res: Resultat, nom: str) -> List[Optional[int]]:
     for d in res.duels.get((nom, nom), []):
         n = len(d.joues_a)
         for t in range(n):
-            if d.voulus_a[t] == d.joues_a[t] and d.voulus_b[t] == d.joues_b[t]:
+            if not d.accident(t):
                 continue
             fin = t + 1 + FENETRE
             if fin > n:
                 continue
-            if any(d.voulus_a[u] != d.joues_a[u] or d.voulus_b[u] != d.joues_b[u]
-                   for u in range(t + 1, fin)):
+            if any(d.accident(u) for u in range(t + 1, fin)):
                 continue
             trouve = None
             for u in range(t + 1, fin):
@@ -292,14 +291,22 @@ def _delais_entre_soi(res: Resultat, nom: str) -> List[Optional[int]]:
     return delais
 
 
-def entre_soi(res: Resultat, nom: str) -> Dict[str, float]:
-    """Rétablissement d'une paire de clones : part non réparée, délai, effectif."""
+def entre_soi(res: Resultat, nom: str) -> Dict[str, Optional[float]]:
+    """Rétablissement d'une paire de clones : part non réparée, délai, effectif.
+
+    `part_non_reparee` vaut **`None`** quand aucun accident n'a été observé, et
+    non zéro. La version précédente rendait 0,0 dans ce cas, et un tournoi sans
+    accident détectable affichait donc « 0% d'accidents non réparés » pour
+    Rancunier — une stratégie qui ne pardonne jamais. Un échantillon vide doit
+    se dire vide ; rendu comme une mesure, il est pire qu'une erreur, parce
+    qu'il a l'air d'un résultat.
+    """
     d = _delais_entre_soi(res, nom)
     finis = [x for x in d if x is not None]
     return {
         "echantillon": len(d),
-        "part_non_reparee": (sum(x is None for x in d) / len(d)) if d else 0.0,
-        "delai_moyen": mean(finis) if finis else float("nan"),
+        "part_non_reparee": (sum(x is None for x in d) / len(d)) if d else None,
+        "delai_moyen": mean(finis) if finis else None,
     }
 
 

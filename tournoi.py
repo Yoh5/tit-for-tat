@@ -8,11 +8,21 @@
 - **Bruit de perception** : le coup est bien joué mais mal lu. Les deux joueurs
   ont alors des historiques **différents**, et aucun ne peut savoir lequel.
 
-Les deux cassent donnant-donnant, mais pas de la même façon, et une seule des
-deux est réparable par le joueur fautif : sous bruit d'exécution il voit son
-propre dérapage, sous bruit de perception il ne le voit pas. C'est pour ça que
-Pavlov s'en sort dans un cas et pas dans l'autre — et c'est exactement ce que
-le tournoi mesure plutôt que de le supposer.
+On attendrait qu'ils se comportent très différemment : sous bruit d'exécution le
+fautif voit son propre dérapage, sous bruit de perception il ne le voit pas. Et
+la littérature les distingue soigneusement.
+
+**Mesuré, l'écart est presque nul.** Sur le rétablissement d'une paire de clones,
+les deux régimes donnent les mêmes chiffres à un point près, et les classements
+bougent à peine. La seule différence tient en un tour : Pavlov se relève en 2
+tours sous bruit d'exécution et en 3 sous bruit de perception, parce que le
+malentendu lui impose un tour de punition supplémentaire avant que les deux
+n'atteignent l'état (trahir, trahir) dont elle sait sortir.
+
+J'avais écrit ici l'inverse — que Pavlov s'en sortait dans un cas et pas dans
+l'autre — avant de le mesurer. C'était faux, et c'est noté parce que l'erreur
+est instructive : la distinction entre les deux bruits est réelle dans le détail
+du mécanisme et sans effet sur ce qui nous intéresse.
 
 ## Pourquoi un nombre de tours tiré au hasard
 
@@ -41,9 +51,31 @@ class Duel:
     #: Coups **exécutés**, ceux que les deux joueurs ont observés.
     joues_a: List[int] = field(default_factory=list)
     joues_b: List[int] = field(default_factory=list)
-    #: Coups **voulus** : la différence avec les joués est le bruit subi.
+    #: Coups **voulus** : la différence avec les joués est le bruit d'exécution.
     voulus_a: List[int] = field(default_factory=list)
     voulus_b: List[int] = field(default_factory=list)
+    #: Coups **vus** : ce que A a cru lire de B, et réciproquement. La différence
+    #: avec les joués est le bruit de perception.
+    #:
+    #: Sans ces deux listes, un accident de perception est indétectable après
+    #: coup — le coup joué étant le coup voulu, `voulus != joues` ne signale
+    #: rien. La première version de ce module ne les gardait pas, et la mesure
+    #: de rétablissement rendait alors **0% pour toutes les stratégies**,
+    #: Rancunier compris, ce qui est impossible : c'était un échantillon vide
+    #: rendu comme un résultat.
+    vus_a: List[int] = field(default_factory=list)
+    vus_b: List[int] = field(default_factory=list)
+
+    def accident(self, t: int) -> bool:
+        """Y a-t-il eu un dérapage ou une mélecture au tour `t` ?
+
+        La définition couvre les deux bruits, donc une mesure écrite avec elle
+        vaut dans les deux régimes.
+        """
+        return (self.voulus_a[t] != self.joues_a[t]
+                or self.voulus_b[t] != self.joues_b[t]
+                or self.vus_a[t] != self.joues_b[t]
+                or self.vus_b[t] != self.joues_a[t])
 
 
 def longueur(alea: random.Random, tours: int) -> int:
@@ -95,13 +127,13 @@ def duel(a: Strategie, b: Strategie, alea: random.Random, tours: int = 200,
             # trahison là où B a coopéré, sans que B puisse le deviner.
             vu_par_a.append((1 - jb) if alea.random() < bruit else jb)
             vu_par_b.append((1 - ja) if alea.random() < bruit else ja)
-            propre_a.append(ja)
-            propre_b.append(jb)
         else:
             vu_par_a.append(jb)
             vu_par_b.append(ja)
-            propre_a.append(ja)
-            propre_b.append(jb)
+        propre_a.append(ja)
+        propre_b.append(jb)
+        d.vus_a.append(vu_par_a[-1])
+        d.vus_b.append(vu_par_b[-1])
 
     return d
 

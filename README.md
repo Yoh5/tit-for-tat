@@ -9,7 +9,8 @@ permet de le voir soi-même plutôt que de me croire.
 
 ```
 python experiences.py              # les quatre expériences
-python -m pytest test_tournoi.py -q   # 31 tests
+python -m pytest test_tournoi.py -q   # 37 tests
+python figures.py                     # les deux figures, calculées depuis le code
 ```
 
 Aucune dépendance en dehors de la bibliothèque standard. Déterministe à graine
@@ -117,6 +118,29 @@ a été le mieux servi par les règles d'inscription. La question « quelle est 
 meilleure stratégie » est mal posée tant qu'on n'a pas dit **combien d'agents on
 peut inscrire, et s'ils peuvent se reconnaître.**
 
+## 5. Les deux sortes de bruit se valent
+
+Un coup qui **dérape** et un coup **mal lu** sont deux accidents différents. Dans
+le premier, le fautif voit son propre dérapage ; dans le second, personne ne sait
+qui s'est trompé. La littérature les traite séparément, et ce dépôt affirmait —
+avant de le mesurer — que Pavlov s'en sortirait dans un cas et pas dans l'autre.
+
+**C'était faux.** Les deux régimes donnent les mêmes parts d'accidents non
+réparés à un point près, et les classements ne bougent pas. Le seul écart tient
+en un tour : Pavlov se relève en 2 tours quand le coup a dérapé, en 3 quand il a
+été mal lu, le malentendu lui coûtant un tour de punition de plus avant que les
+deux n'atteignent l'état dont elle sait sortir.
+
+La distinction est donc réelle dans le mécanisme et sans effet sur ce qui nous
+intéresse. Un écart attendu qui ne se produit pas est aussi un résultat.
+
+En écrivant cette expérience, la première version a rendu **0 % pour toutes les
+stratégies**, Rancunier compris — une stratégie qui ne pardonne jamais. Sous
+bruit de perception le coup joué est le coup voulu, donc le détecteur
+d'accident ne se déclenchait jamais, et la fonction rendait un **échantillon vide
+comme s'il valait zéro**. `Duel` garde maintenant aussi ce que chaque joueur a
+*lu*, et une mesure sans échantillon rend `None`, jamais 0.
+
 ---
 
 ## Ce que mesure le dépôt, et pourquoi c'est l'essentiel
@@ -167,7 +191,8 @@ sur les conditions. `test_le_retablissement_ne_depend_pas_du_bruit` la vérifie.
 | `tournoi.py` | duel, tournoi, les deux bruits, dynamique de réplication |
 | `proprietes.py` | les propriétés d'Axelrod comme mesures, et la cinquième |
 | `experiences.py` | les quatre expériences ; `--json` pour les chiffres |
-| `test_tournoi.py` | 31 tests, dont les trois affirmations centrales |
+| `test_tournoi.py` | 37 tests, dont les trois affirmations centrales |
+| `figures.py` | les deux figures, recalculées à chaque exécution |
 
 ## Références
 

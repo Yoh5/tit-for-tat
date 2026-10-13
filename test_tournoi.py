@@ -273,3 +273,66 @@ def test_la_coalition_place_son_recolteur_premier():
     res = tournoi(pool, graine=1, bruit=0.0)
     assert res.rang("Coalition (récolteur)") == 1
     assert res.rang("Donnant-donnant") > 5, "le plateau a changé sous ses pieds"
+
+
+# --------------------------------------------------------------------------- #
+# Les deux bruits, et le zéro qui n'en était pas un
+# --------------------------------------------------------------------------- #
+def test_un_echantillon_vide_ne_vaut_pas_zero():
+    """Sans accident observable, la mesure doit dire « indéfini », pas 0%.
+
+    La première version rendait 0,0, et un tournoi où aucun accident n'était
+    détectable affichait donc « 0% d'accidents non réparés » pour Rancunier —
+    une stratégie qui ne pardonne jamais. Un échantillon vide rendu comme une
+    mesure est pire qu'une erreur : il a l'air d'un résultat.
+    """
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    m = P.entre_soi(res, "Rancunier")
+    assert m["echantillon"] == 0
+    assert m["part_non_reparee"] is None
+    assert m["delai_moyen"] is None
+
+
+def test_le_bruit_de_perception_produit_des_accidents_detectables():
+    """Sous bruit de perception, le coup joué EST le coup voulu.
+
+    L'accident ne se voit donc que dans l'écart entre ce qui a été joué et ce
+    qui a été lu — c'est pourquoi `Duel` garde `vus_a` et `vus_b`. Sans elles,
+    la mesure était silencieusement vide.
+    """
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.05, perception=True,
+                  repetitions=30)
+    d = res.duels[("Donnant-donnant", "Donnant-donnant")][0]
+    assert d.voulus_a == d.joues_a, "aucun dérapage d'exécution en mode perception"
+    assert any(d.accident(t) for t in range(len(d.joues_a)))
+    assert P.entre_soi(res, "Donnant-donnant")["echantillon"] > 0
+
+
+@pytest.mark.parametrize("nom,plancher,plafond", [
+    ("Donnant-donnant", 0.55, 0.90),
+    ("Pavlov", 0.0, 0.05),
+    ("Rancunier", 0.95, 1.0),
+])
+def test_les_deux_bruits_donnent_le_meme_retablissement(nom, plancher, plafond):
+    """L'écart attendu entre les deux régimes ne se produit pas.
+
+    Les deux doivent tomber dans la même fourchette : c'est le résultat de
+    l'expérience 5, et il contredit ce que ce dépôt affirmait avant de mesurer.
+    """
+    for perception in (False, True):
+        res = tournoi(S.pool_classique(), graine=1, bruit=0.05,
+                      repetitions=60, perception=perception)
+        part = P.entre_soi(res, nom)["part_non_reparee"]
+        assert part is not None
+        assert plancher <= part <= plafond, (nom, perception, part)
+
+
+def test_pavlov_paie_un_tour_de_plus_sous_malentendu():
+    """La seule différence mesurable entre les deux bruits."""
+    delais = {}
+    for perception in (False, True):
+        res = tournoi(S.pool_classique(), graine=1, bruit=0.05,
+                      repetitions=60, perception=perception)
+        delais[perception] = P.entre_soi(res, "Pavlov")["delai_moyen"]
+    assert delais[True] > delais[False]
+    assert delais[True] - delais[False] == pytest.approx(1.0, abs=0.3), delais

@@ -7,6 +7,8 @@
    Stewart et Plotkin (2013).
 4. **La question « quelle est la meilleure stratégie » est mal posée** dès qu'on
    peut inscrire plusieurs agents (Southampton, 2004).
+5. **Les deux sortes de bruit se valent** pour cette question — un écart attendu
+   qui ne se produit pas.
 
 Usage :
     python experiences.py              # les quatre
@@ -255,15 +257,73 @@ def experience_4(graine: int = 1) -> Dict[str, Any]:
     }
 
 
+def experience_5(graine: int = 1) -> Dict[str, Any]:
+    """Les deux bruits : une distinction réelle, et sans effet mesurable.
+
+    Le coup qui dérape et le coup mal lu sont deux accidents différents. Dans le
+    premier, le fautif voit son propre dérapage ; dans le second, personne ne
+    sait qui s'est trompé. La littérature les traite séparément et on s'attend à
+    ce que ça compte.
+
+    Ça ne compte presque pas — pour cette question-là. Ce qui vaut d'être dit,
+    parce qu'un écart attendu qui ne se produit pas est aussi un résultat.
+    """
+    print("\n" + TRAIT)
+    print("5. LES DEUX BRUITS — un écart attendu qui n'arrive pas")
+    print(TRAIT)
+    print("\n  Exécution : le coup joué dérape, les deux voient le même coup.")
+    print("  Perception : le coup est juste, la lecture ne l'est pas, et les")
+    print("  deux joueurs ont des historiques différents sans pouvoir le savoir.\n")
+
+    ex = tournoi(S.pool_classique(), graine=graine, bruit=0.05, repetitions=60)
+    pe = tournoi(S.pool_classique(), graine=graine, bruit=0.05, repetitions=60,
+                 perception=True)
+
+    def pct(v):
+        return " n/d " if v is None else f"{v:>4.0%}"
+
+    def tours(v):
+        return "   - " if v is None else f"{v:>3.1f}t"
+
+    print(f"  {'stratégie':<32} {'exécution':>10} {'délai':>7} "
+          f"{'perception':>12} {'délai':>7}")
+    compare = {}
+    for s in S.pool_classique():
+        a, b = P.entre_soi(ex, s.nom), P.entre_soi(pe, s.nom)
+        print(f"  {s.nom:<32} {pct(a['part_non_reparee']):>10} "
+              f"{tours(a['delai_moyen']):>7} {pct(b['part_non_reparee']):>12} "
+              f"{tours(b['delai_moyen']):>7}")
+        compare[s.nom] = {"execution": a, "perception": b}
+
+    print("\n  Les parts sont identiques à un point près. Le seul écart tient en")
+    print("  un tour : Pavlov se relève en 2 tours quand le coup a dérapé, en 3")
+    print("  quand il a été mal lu — le malentendu lui coûte un tour de punition")
+    print("  de plus avant que les deux n'atteignent (trahir, trahir), l'état")
+    print("  dont elle sait sortir.")
+    print("\n  J'avais écrit le contraire dans tournoi.py avant de le mesurer :")
+    print("  que Pavlov s'en sortirait dans un cas et pas dans l'autre. La")
+    print("  distinction est réelle dans le mécanisme et sans effet sur le")
+    print("  résultat. Un écart attendu qui ne vient pas se publie aussi.")
+
+    print(f"\n  {'':<13} {'tête du classement':<40}")
+    for nom, r in (("exécution", ex), ("perception", pe)):
+        tete = " | ".join(f"{n[:20]} {v:.2f}" for n, v in r.classement()[:3])
+        print(f"  {nom:<13} {tete}")
+    return {"comparaison": compare,
+            "classement_execution": ex.classement()[:3],
+            "classement_perception": pe.classement()[:3]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4))
+    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4, 5))
     ap.add_argument("--graine", type=int, default=1)
     ap.add_argument("--json")
     args = ap.parse_args()
 
-    faire = {1: experience_1, 2: experience_2, 3: experience_3, 4: experience_4}
-    choisies = [args.une] if args.une else [1, 2, 3, 4]
+    faire = {1: experience_1, 2: experience_2, 3: experience_3,
+             4: experience_4, 5: experience_5}
+    choisies = [args.une] if args.une else [1, 2, 3, 4, 5]
     out = {f"experience_{k}": faire[k](args.graine) for k in choisies}
 
     if args.json:
