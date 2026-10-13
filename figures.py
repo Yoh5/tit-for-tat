@@ -41,6 +41,13 @@ SUCCES = (122, 184, 122)
 _POLICES = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
 
 
+def opacite(couleur, alpha: float):
+    """La couleur mélangée au fond — PIL ne gère pas l'alpha sur un dessin
+    direct, donc on la calcule."""
+    return tuple(int(SURFACE[i] + (couleur[i] - SURFACE[i]) * alpha)
+                 for i in range(3))
+
+
 def f(nom: str, taille: int) -> ImageFont.FreeTypeFont:
     try:
         return ImageFont.truetype(str(_POLICES / nom), taille)
@@ -356,8 +363,71 @@ def figure_cout() -> Path:
     return chemin
 
 
+def figure_transfert() -> Path:
+    """Qui gagne quand un seul des deux dérape — et combien le pardon transfère.
+
+    Un graphique en haltères : deux points par ligne, reliés. L'écart se lit
+    sans légende, et son élargissement du haut vers le bas **est** le résultat.
+    """
+    import experiences as E
+
+    lignes = []
+    for nom, fabrique in E.ECHELLE_DU_PARDON:
+        a, b, err = E._duo(fabrique, 0.0, 0.04, graines=600)
+        lignes.append((nom, a, b, err))
+
+    L = 1600
+    H = 330 + len(lignes) * 86
+    img = Image.new("RGB", (L, H), SURFACE)
+    d = ImageDraw.Draw(img)
+    ecrire(d, (70, 50), "Être irréprochable ne protège pas", GRAS(56), ENCRE)
+    ecrire(d, (70, 124),
+           "A ne dérape jamais. B dérape 4 % du temps. Les deux jouent la même "
+           "stratégie.", NORMAL(28), ENCRE_2)
+    ecrire(d, (70, 164),
+           "De la moins indulgente, en haut, à la plus indulgente, en bas. "
+           "600 parties par ligne.", NORMAL(24), ENCRE_3)
+
+    bas = min(min(a, b) for _, a, b, _ in lignes) - 0.12
+    haut = max(max(a, b) for _, a, b, _ in lignes) + 0.12
+    x0, larg = 420, L - 420 - 210
+
+    def px(v: float) -> float:
+        return x0 + larg * (v - bas) / (haut - bas)
+
+    y = 236
+    for nom, a, b, err in lignes:
+        ecrire(d, (x0 - 26, y + 6), nom, NORMAL(26), ENCRE_2, droite=True)
+        xa, xb = px(a), px(b)
+        teinte = CRITIQUE if b > a else SUCCES
+        d.line([(xa, y + 14), (xb, y + 14)], fill=opacite(teinte, 0.55), width=7)
+        # Le parfait est un anneau, le fautif un disque plein : la forme
+        # distingue les deux même sans la couleur.
+        d.ellipse([xa - 13, y + 1, xa + 13, y + 27], outline=ENCRE, width=4)
+        d.ellipse([xb - 12, y + 2, xb + 12, y + 26], fill=teinte)
+        signe = "+" if b > a else ""
+        ecrire(d, (x0 + larg + 34, y + 6), f"{signe}{b - a:.3f}", MONO(28),
+               teinte)
+        y += 86
+
+    # Légende, posée en bas pour ne pas couper la lecture des lignes.
+    ly = H - 56
+    d.ellipse([70, ly - 13, 96, ly + 13], outline=ENCRE, width=4)
+    ecrire(d, (110, ly - 14), "A, qui ne dérape jamais", NORMAL(24), ENCRE_3)
+    d.ellipse([460, ly - 12, 484, ly + 12], fill=CRITIQUE)
+    ecrire(d, (498, ly - 14), "B, qui dérape 4 % du temps", NORMAL(24), ENCRE_3)
+    ecrire(d, (L - 70, ly - 14), "github.com/Yoh5/tit-for-tat", MONO(22),
+           ENCRE_3, droite=True)
+
+    SORTIE.mkdir(parents=True, exist_ok=True)
+    chemin = SORTIE / "transfert.png"
+    img.save(chemin, optimize=True)
+    return chemin
+
+
 def main() -> int:
-    for chemin in (figure_echo(), figure_barres(), figure_cout()):
+    for chemin in (figure_echo(), figure_barres(), figure_cout(),
+                   figure_transfert()):
         ko = chemin.stat().st_size / 1024
         print(f"ecrit : figures/{chemin.name}  ({ko:.0f} Ko)")
     return 0

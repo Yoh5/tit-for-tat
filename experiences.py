@@ -9,6 +9,10 @@
    peut inscrire plusieurs agents (Southampton, 2004).
 5. **Les deux sortes de bruit se valent** pour cette question — un écart attendu
    qui ne se produit pas.
+6. **Le pardon rapporte le plus quand les accidents sont rares**, pas quand ils
+   sont fréquents.
+7. **Être irréprochable ne protège pas** : celui qui dérape gagne plus que celui
+   qui ne dérape jamais.
 
 Usage :
     python experiences.py              # les quatre
@@ -19,12 +23,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from statistics import mean, stdev
 from typing import Any, Dict, List, Optional, Tuple
 
 import proprietes as P
 import strategies as S
-from tournoi import evolution, matrice_gains, tournoi
+from tournoi import duel, evolution, matrice_gains, tournoi
 
 #: Niveaux de bruit balayés. 0,01 veut dire « un coup sur cent dérape » : c'est
 #: optimiste pour un système distribué, et il suffit déjà à tout changer.
@@ -439,16 +444,98 @@ def experience_6(graine: int = 1, graines: int = 16) -> Dict[str, Any]:
             "pic": pic, "graines": graines}
 
 
+#: Les deux joueurs, du moins indulgent au plus indulgent. L'ordre est le
+#: résultat : c'est lui qu'on lit dans la colonne d'écart.
+ECHELLE_DU_PARDON = [
+    ("Rancunier (aucun pardon)", S.Rancunier),
+    ("Donnant-donnant", S.donnant_donnant),
+    ("Généreux 1/8", lambda: S.donnant_donnant_genereux(0.125)),
+    ("Généreux 1/3", S.donnant_donnant_genereux),
+    ("Généreux 2/3", lambda: S.donnant_donnant_genereux(2 / 3)),
+    ("Donnant-donnant x2", S.DonnantDonnantDeuxFois),
+    ("Toujours coopérer", S.ToujoursCooperer),
+]
+
+
+def _duo(fabrique, bruit_a: float, bruit_b: float,
+         graines: int = 600) -> Tuple[float, float, float]:
+    """Deux clones, l'un fiable et l'autre non. Rend (gain A, gain B, erreur)."""
+    ga, gb = [], []
+    for g in range(graines):
+        d = duel(fabrique(), fabrique(), random.Random(g * 7919 + 13),
+                 tours=200, bruit=(bruit_a, bruit_b))
+        ga.append(d.gain_a / d.tours)
+        gb.append(d.gain_b / d.tours)
+    err = ((stdev(ga) ** 2 + stdev(gb) ** 2) / len(ga)) ** 0.5
+    return mean(ga), mean(gb), err
+
+
+def experience_7(graine: int = 1, bruit: float = 0.04) -> Dict[str, Any]:
+    """Ma fiabilité me protège-t-elle d'un correspondant qui dérape ? Non.
+
+    Jusqu'ici les deux joueurs subissaient le même bruit. Ce n'est pas la
+    situation qu'on rencontre : deux services n'ont pas la même fiabilité, et la
+    question qu'on se pose vraiment est de savoir si la sienne sert à quelque
+    chose.
+
+    **Elle ne sert pas.** Le joueur irréprochable finit *derrière* celui qui
+    commet toutes les erreurs — parce qu'un dérapage est une trahison, qu'une
+    trahison contre un coopérateur rapporte la tentation, et que les représailles
+    qui suivent se paient à deux. L'accident enrichit celui qui le commet.
+
+    Et l'écart grandit avec le pardon : plus on est indulgent, plus on
+    subventionne un correspondant peu fiable.
+    """
+    print("\n" + TRAIT)
+    print("7. LA FIABILITÉ NE PROTÈGE PAS — c'est le pardon de l'autre qui le fait")
+    print(TRAIT)
+    print(f"\n  A est IRRÉPROCHABLE (0 % de bruit). B dérape {bruit:.0%} du temps.")
+    print("  Les deux jouent la même stratégie, de la moins à la plus indulgente.\n")
+    print(f"  {'stratégie des deux':<28} {'A parfait':>10} {'B fautif':>10} "
+          f"{'écart':>12}")
+    lignes = []
+    for nom, fabrique in ECHELLE_DU_PARDON:
+        a, b, err = _duo(fabrique, 0.0, bruit)
+        print(f"  {nom:<28} {a:>10.3f} {b:>10.3f} {b - a:>+9.3f} ±{err:.3f}")
+        lignes.append({"strategie": nom, "gain_irreprochable": round(a, 4),
+                       "gain_fautif": round(b, 4), "ecart": round(b - a, 4),
+                       "erreur": round(err, 4)})
+
+    rancunier = lignes[0]
+    cooperer = lignes[-1]
+    print(f"\n  => Sauf chez Rancunier, CELUI QUI DÉRAPE GAGNE PLUS QUE CELUI QUI")
+    print(f"     NE DÉRAPE JAMAIS, et l'écart suit l'indulgence : "
+          f"{lignes[1]['ecart']:+.3f} pour donnant-donnant, "
+          f"{cooperer['ecart']:+.3f} pour la coopération inconditionnelle.")
+    print("\n  Le mécanisme est simple une fois dit : un dérapage est une")
+    print("  trahison, une trahison contre un coopérateur rapporte la tentation,")
+    print("  et les représailles qui suivent se paient à deux. L'accident")
+    print("  enrichit celui qui le commet.")
+    print(f"\n  Rancunier est la seule exception — l'irréprochable y finit devant")
+    print(f"  de {-rancunier['ecart']:.3f}. Mais les deux y gagnent "
+          f"{rancunier['gain_irreprochable']:.2f} et "
+          f"{rancunier['gain_fautif']:.2f} contre près de 2,9 ailleurs : il")
+    print("  gagne la comparaison en ruinant les deux joueurs.")
+    print("\n  CE QUE ÇA CHANGE. Le pardon n'est ni gratuit ni altruiste : c'est")
+    print("  un transfert, et il va précisément à celui qui dérape. On le")
+    print("  consent parce que refuser coûte davantage — mais on le paie, et")
+    print("  une politique de reprise indulgente subventionne le correspondant")
+    print("  le moins fiable. Raison de mesurer sa fiabilité séparément plutôt")
+    print("  que de la supposer réglée par la sienne.")
+    return {"bruit": bruit, "lignes": lignes}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4, 5, 6))
+    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4, 5, 6, 7))
     ap.add_argument("--graine", type=int, default=1)
     ap.add_argument("--json")
     args = ap.parse_args()
 
     faire = {1: experience_1, 2: experience_2, 3: experience_3,
-             4: experience_4, 5: experience_5, 6: experience_6}
-    choisies = [args.une] if args.une else [1, 2, 3, 4, 5, 6]
+             4: experience_4, 5: experience_5, 6: experience_6,
+             7: experience_7}
+    choisies = [args.une] if args.une else [1, 2, 3, 4, 5, 6, 7]
     out = {f"experience_{k}": faire[k](args.graine) for k in choisies}
 
     if args.json:

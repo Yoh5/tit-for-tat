@@ -56,6 +56,7 @@ def controles(d: Dict[str, Any]) -> List[Tuple[str, str]]:
     """(ce qu'on vérifie, la chaîne qui doit figurer dans le README)."""
     e1, e2, e3 = d["experience_1"], d["experience_2"], d["experience_3"]
     e4, e6 = d["experience_4"], d["experience_6"]
+    e7 = d.get("experience_7")
     c: List[Tuple[str, str]] = []
 
     c.append(("E1 — séparation des gentilles",
@@ -96,6 +97,20 @@ def controles(d: Dict[str, Any]) -> List[Tuple[str, str]]:
          else f"{fr(p['ecart_pct'], 1)} %")
         for p in courbe)
     c.append(("E6 — la courbe du coût", f"| ce qu'on perd | {ligne} |"))
+
+    if e7:
+        # Les deux bouts de l'échelle du pardon : le seul cas où l'irréprochable
+        # finit devant, et celui où il est le plus dépassé. Si l'un des deux
+        # bouge, c'est tout le résultat qui a bougé.
+        for cle, gabarit in (
+            (e7["lignes"][0], "| {s} | {a} | {b} | **{e}** |"),
+            (e7["lignes"][-1], "| {s} | {a} | {b} | **{e}** |"),
+        ):
+            signe = "+" if cle["ecart"] > 0 else "−"
+            c.append((f"E7 — {cle['strategie']}", gabarit.format(
+                s=cle["strategie"], a=fr(cle["gain_irreprochable"]),
+                b=fr(cle["gain_fautif"]),
+                e=signe + fr(abs(cle["ecart"])))))
     return c
 
 

@@ -449,3 +449,50 @@ def test_le_readme_ne_derive_pas_du_code():
                      repetitions=60)
     pavlov = P.entre_soi(bruite, "Pavlov")["delai_moyen"]
     assert V.normaliser(f"| Pavlov | **0 %** | {V.fr(pavlov, 2)} tour") in readme
+
+
+# --------------------------------------------------------------------------- #
+# Être irréprochable ne protège pas
+# --------------------------------------------------------------------------- #
+def test_le_bruit_peut_etre_asymetrique():
+    """Deux services n'ont pas la même fiabilité, et c'est le cas qui compte."""
+    d = duel(S.ToujoursCooperer(), S.ToujoursCooperer(), random.Random(3),
+             tours=400, bruit=(0.0, 0.5))
+    rates_a = sum(v != j for v, j in zip(d.voulus_a, d.joues_a))
+    rates_b = sum(v != j for v, j in zip(d.voulus_b, d.joues_b))
+    assert rates_a == 0, "A ne dérape jamais"
+    assert rates_b > 0.3 * d.tours, (rates_b, d.tours)
+
+
+def test_celui_qui_derape_gagne_plus_que_celui_qui_ne_derape_jamais():
+    """L'AFFIRMATION de l'expérience 7, et elle est contre-intuitive.
+
+    Un dérapage est une trahison ; une trahison contre un coopérateur rapporte
+    la tentation ; les représailles se paient à deux. L'accident enrichit donc
+    celui qui le commet.
+    """
+    a, b, err = E._duo(S.donnant_donnant_genereux, 0.0, 0.04, graines=400)
+    assert b > a + 2 * err, (a, b, err)
+
+
+def test_le_transfert_grandit_avec_le_pardon():
+    """Plus on est indulgent, plus on subventionne un correspondant peu fiable.
+
+    C'est le prix du pardon, et il faut le nommer : sans ça, « pardonnez, c'est
+    mieux » se lit comme un repas gratuit.
+    """
+    _, _, _ = E._duo(S.donnant_donnant, 0.0, 0.04, graines=200)
+    serre = E._duo(S.donnant_donnant, 0.0, 0.04, graines=400)
+    large = E._duo(S.ToujoursCooperer, 0.0, 0.04, graines=400)
+    ecart_serre = serre[1] - serre[0]
+    ecart_large = large[1] - large[0]
+    assert ecart_large > ecart_serre, (ecart_serre, ecart_large)
+
+
+def test_rancunier_gagne_la_comparaison_en_ruinant_les_deux():
+    """La seule stratégie où l'irréprochable finit devant — et les deux y
+    perdent 40 %. Un classement relatif ne dit pas qu'on a bien joué."""
+    a, b, _ = E._duo(S.Rancunier, 0.0, 0.04, graines=300)
+    assert a > b, "l'irréprochable finit devant"
+    doux, _, _ = E._duo(S.donnant_donnant_genereux, 0.0, 0.04, graines=300)
+    assert a < doux * 0.7, (a, doux)

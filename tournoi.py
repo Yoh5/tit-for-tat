@@ -104,13 +104,19 @@ def longueur(alea: random.Random, tours: int) -> int:
 
 
 def duel(a: Strategie, b: Strategie, alea: random.Random, tours: int = 200,
-         bruit: float = 0.0, perception: bool = False) -> Duel:
+         bruit: float | Tuple[float, float] = 0.0,
+         perception: bool = False) -> Duel:
     """Fait jouer `a` contre `b`.
 
     `bruit` est la probabilité qu'un coup dérape (exécution) ou soit mal lu
     (`perception=True`). Les historiques passés aux stratégies sont toujours ce
     qu'elles **observent** : c'est la seule information dont un joueur dispose.
+
+    Un couple `(ea, eb)` donne **un bruit par joueur**. C'est le cas qui
+    ressemble à la réalité : deux services n'ont pas la même fiabilité, et la
+    question qu'on se pose vraiment est de savoir si la sienne protège.
     """
+    ea, eb = bruit if isinstance(bruit, tuple) else (bruit, bruit)
     a.nouvelle_partie()
     b.nouvelle_partie()
     n = longueur(alea, tours)
@@ -128,9 +134,9 @@ def duel(a: Strategie, b: Strategie, alea: random.Random, tours: int = 200,
         d.voulus_a.append(va)
         d.voulus_b.append(vb)
 
-        if bruit and not perception:
-            ja = (1 - va) if alea.random() < bruit else va
-            jb = (1 - vb) if alea.random() < bruit else vb
+        if (ea or eb) and not perception:
+            ja = (1 - va) if alea.random() < ea else va
+            jb = (1 - vb) if alea.random() < eb else vb
         else:
             ja, jb = va, vb
 
@@ -140,11 +146,12 @@ def duel(a: Strategie, b: Strategie, alea: random.Random, tours: int = 200,
         d.joues_a.append(ja)
         d.joues_b.append(jb)
 
-        if bruit and perception:
+        if (ea or eb) and perception:
             # Le coup est juste, la lecture ne l'est pas : A peut voir une
-            # trahison là où B a coopéré, sans que B puisse le deviner.
-            vu_par_a.append((1 - jb) if alea.random() < bruit else jb)
-            vu_par_b.append((1 - ja) if alea.random() < bruit else ja)
+            # trahison là où B a coopéré, sans que B puisse le deviner. Le
+            # bruit de A est celui de SA lecture, donc de ce qu'il voit de B.
+            vu_par_a.append((1 - jb) if alea.random() < ea else jb)
+            vu_par_b.append((1 - ja) if alea.random() < eb else ja)
         else:
             vu_par_a.append(jb)
             vu_par_b.append(ja)

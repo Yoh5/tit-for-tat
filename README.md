@@ -11,8 +11,8 @@ permet de le voir soi-même plutôt que de me croire.
 
 ```
 python experiences.py              # les six expériences
-python -m pytest test_tournoi.py -q   # 44 tests
-python figures.py                     # les trois figures, calculées depuis le code
+python -m pytest test_tournoi.py -q   # 48 tests
+python figures.py                     # les quatre figures, calculées depuis le code
 ```
 
 Aucune dépendance en dehors de la bibliothèque standard, sauf Pillow pour les
@@ -196,6 +196,50 @@ d'ingénierie, pour une politique de reprise entre deux services ou deux agents
 autonomes : un taux d'échec d'un pour cent est précisément celui où une politique
 qui ne pardonne pas coûte le plus cher.
 
+## 7. Être irréprochable ne protège pas
+
+Jusqu'ici les deux joueurs subissaient le même bruit. Ce n'est pas la situation
+qu'on rencontre : deux services n'ont pas la même fiabilité, et la question
+qu'on se pose vraiment est de savoir si la sienne sert à quelque chose.
+
+A ne dérape jamais. B dérape 4 % du temps. Les deux jouent la même stratégie.
+
+![Être irréprochable ne protège pas : l'écart entre le joueur parfait et le joueur fautif grandit avec l'indulgence de la stratégie.](figures/transfert.png)
+
+| stratégie des deux | A, parfait | B, fautif | écart |
+|---|---|---|---|
+| Rancunier (aucun pardon) | 1,679 | 1,543 | **−0,136** |
+| Donnant-donnant | 2,444 | 2,473 | +0,029 |
+| Généreux 1/8 | 2,831 | 2,917 | +0,085 |
+| Généreux 1/3 | 2,889 | 3,002 | +0,113 |
+| Généreux 2/3 | 2,896 | 3,045 | +0,149 |
+| Donnant-donnant x2 | 2,884 | 3,075 | +0,191 |
+| Toujours coopérer | 2,881 | 3,080 | **+0,199** |
+
+*(600 parties par ligne, ± 0,004 à 0,037)*
+
+**Celui qui dérape gagne plus que celui qui ne dérape jamais.** Le mécanisme est
+simple une fois dit : un dérapage est une trahison, une trahison contre un
+coopérateur rapporte la tentation, et les représailles qui suivent se paient à
+deux. L'accident enrichit celui qui le commet.
+
+Et l'écart suit l'indulgence, de +0,029 à +0,199 : **plus on pardonne, plus on
+subventionne un correspondant peu fiable.**
+
+Rancunier est la seule exception — l'irréprochable y finit devant de 0,136. Mais
+les deux y gagnent 1,68 et 1,54 contre près de 2,9 ailleurs : il gagne la
+comparaison en ruinant les deux joueurs. Un classement relatif ne dit pas qu'on
+a bien joué.
+
+> **Le pardon n'est ni gratuit ni altruiste : c'est un transfert, et il va
+> précisément à celui qui dérape.** On le consent parce que refuser coûte
+> davantage — mais on le paie.
+
+Pour une politique de reprise entre services, la conséquence est directe : votre
+propre fiabilité ne vous protège pas, et une politique indulgente subventionne
+votre correspondant le moins fiable. Raison de mesurer sa fiabilité séparément
+plutôt que de la supposer réglée par la vôtre.
+
 ---
 
 ## Ce que mesure le dépôt, et pourquoi c'est l'essentiel
@@ -259,9 +303,9 @@ sous-processus avec des `PYTHONHASHSEED` différents et exige le même résultat
 | `tournoi.py` | duel, tournoi, les deux bruits, dynamique de réplication |
 | `proprietes.py` | les propriétés d'Axelrod comme mesures, et la cinquième |
 | `experiences.py` | les quatre expériences ; `--json` pour les chiffres |
-| `test_tournoi.py` | 44 tests, dont les affirmations centrales et le déterminisme |
+| `test_tournoi.py` | 48 tests, dont les affirmations centrales et le déterminisme |
 | `verifier_readme.py` | confronte chaque chiffre de ce README à ce que le code produit |
-| `figures.py` | les trois figures, recalculées à chaque exécution |
+| `figures.py` | les quatre figures, recalculées à chaque exécution |
 
 ## Références
 
