@@ -1,0 +1,275 @@
+"""Tests : les affirmations du README, vérifiées par le code.
+
+Le principe est celui du reste du dépôt : on ne demande pas au lecteur de
+croire une dérivation. Les trois affirmations qui portent l'argument —
+l'écho de donnant-donnant, le relèvement de Pavlov, et le fait que l'extorsion
+extorque — sont des **tests**, pas des phrases.
+
+    python -m pytest test_tournoi.py -q
+"""
+from __future__ import annotations
+
+import random
+
+import proprietes as P
+import pytest
+import strategies as S
+from tournoi import duel, evolution, matrice_gains, tournoi
+
+
+def alea():
+    return random.Random(0)
+
+
+# --------------------------------------------------------------------------- #
+# Le jeu
+# --------------------------------------------------------------------------- #
+def test_cest_bien_un_dilemme_du_prisonnier():
+    """T > R > P > S, et 2R > T + S pour que la coopération mutuelle batte
+    l'alternance entre trahisons."""
+    assert S.T > S.R > S.P > S.S
+    assert 2 * S.R > S.T + S.S
+
+
+def test_gains_symetriques():
+    for (a, b), (ga, gb) in S.GAINS.items():
+        assert S.GAINS[(b, a)] == (gb, ga)
+
+
+# --------------------------------------------------------------------------- #
+# Les stratégies font ce que leur nom dit
+# --------------------------------------------------------------------------- #
+def test_donnant_donnant_copie():
+    dd = S.donnant_donnant()
+    assert dd.jouer([], [], alea()) == S.COOP, "gentille : coopère d'abord"
+    assert dd.jouer([S.COOP], [S.TRAHIR], alea()) == S.TRAHIR
+    assert dd.jouer([S.TRAHIR], [S.COOP], alea()) == S.COOP
+
+
+@pytest.mark.parametrize("mien,sien,attendu", [
+    (S.COOP, S.COOP, S.COOP),      # R : gagné, on garde
+    (S.COOP, S.TRAHIR, S.TRAHIR),  # S : perdu, on change
+    (S.TRAHIR, S.COOP, S.TRAHIR),  # T : gagné, on garde
+    (S.TRAHIR, S.TRAHIR, S.COOP),  # P : perdu, on change
+])
+def test_pavlov_win_stay_lose_shift(mien, sien, attendu):
+    assert S.pavlov().jouer([mien], [sien], alea()) == attendu
+
+
+def test_pardon_genereux_vaut_un_tiers():
+    """Nowak et Sigmund : min(1-(T-R)/(R-S), (R-P)/(T-P)) ; ici 1/3."""
+    assert S.PARDON == pytest.approx(1 / 3)
+
+
+def test_rancunier_ne_pardonne_jamais():
+    r = S.Rancunier()
+    assert r.jouer([S.COOP], [S.TRAHIR], alea()) == S.TRAHIR
+    assert r.jouer([S.TRAHIR] * 9, [S.TRAHIR] + [S.COOP] * 8, alea()) == S.TRAHIR
+
+
+def test_donnant_donnant_deux_fois_absorbe_un_accident():
+    """Une trahison isolée ne déclenche rien ; deux de suite, oui."""
+    d = S.DonnantDonnantDeuxFois()
+    assert d.jouer([S.COOP], [S.TRAHIR], alea()) == S.COOP
+    assert d.jouer([S.COOP] * 2, [S.TRAHIR] * 2, alea()) == S.TRAHIR
+
+
+# --------------------------------------------------------------------------- #
+# Le mécanisme central : l'écho
+# --------------------------------------------------------------------------- #
+def _echo(fabrique, tours: int = 40) -> bool:
+    """Deux clones, un seul accident au tour 0 : retrouvent-ils la coopération ?
+
+    On force le dérapage à la main plutôt que d'attendre le bruit, pour que le
+    test soit déterministe et que l'accident soit exactement un.
+    """
+    a, b = fabrique(), fabrique()
+    a.nouvelle_partie()
+    b.nouvelle_partie()
+    ha, hb = [], []
+    al = alea()
+    for t in range(tours):
+        ca = a.jouer(ha, hb, al)
+        cb = b.jouer(hb, ha, al)
+        if t == 0:
+            ca = S.TRAHIR  # l'accident, une fois
+        ha.append(ca)
+        hb.append(cb)
+        if t > 0 and ca == S.COOP and cb == S.COOP:
+            return True
+    return False
+
+
+def test_deux_donnant_donnant_ne_se_relevent_pas():
+    """L'AFFIRMATION CENTRALE : un seul accident condamne la paire.
+
+    A dérape, B riposte, A riposte à la riposte : les deux alternent trahison
+    et coopération en décalé et ne retombent jamais en phase.
+    """
+    assert not _echo(S.donnant_donnant), "donnant-donnant devrait rester coincé"
+
+
+def test_rancunier_est_pire_encore():
+    assert not _echo(S.Rancunier)
+
+
+@pytest.mark.parametrize("fabrique", [
+    S.pavlov,                       # sort de la spirale de lui-même
+    S.DonnantDonnantDeuxFois,       # absorbe l'accident
+    S.donnant_donnant_genereux,     # pardonne au hasard
+])
+def test_ces_strategies_se_relevent(fabrique):
+    assert _echo(fabrique), f"{fabrique} devrait retrouver la coopération"
+
+
+def test_pavlov_se_releve_en_deux_tours():
+    """Le détail du mécanisme : (D,C) puis (D,D) puis (C,C)."""
+    a, b = S.pavlov(), S.pavlov()
+    ha, hb = [S.TRAHIR], [S.COOP]          # l'accident vient d'avoir lieu
+    al = alea()
+    ca, cb = a.jouer(ha, hb, al), b.jouer(hb, ha, al)
+    assert (ca, cb) == (S.TRAHIR, S.TRAHIR), "elle encaisse un tour de punition"
+    ha.append(ca)
+    hb.append(cb)
+    assert (a.jouer(ha, hb, al), b.jouer(hb, ha, al)) == (S.COOP, S.COOP)
+
+
+# --------------------------------------------------------------------------- #
+# L'extorsion extorque — mesuré, pas affirmé
+# --------------------------------------------------------------------------- #
+def test_extorsion_extorque():
+    """Contre un coopérateur naïf, elle doit prendre nettement plus qu'elle ne
+    donne. On ne vérifie pas la dérivation de Press et Dyson, on vérifie la
+    propriété qu'elle annonce."""
+    noms, A = matrice_gains([S.extorsion_zd(), S.ToujoursCooperer()],
+                            graine=3, tours=400, repetitions=8)
+    i, j = noms.index("Extorsion (ZD, x2)"), noms.index("Toujours coopérer")
+    assert A[i][j] > A[j][i] * 1.4, (A[i][j], A[j][i])
+
+
+def test_extorsion_bat_donnant_donnant_en_duel():
+    noms, A = matrice_gains([S.extorsion_zd(), S.donnant_donnant()],
+                            graine=3, tours=400, repetitions=8)
+    i, j = noms.index("Extorsion (ZD, x2)"), noms.index("Donnant-donnant")
+    assert A[i][j] > A[j][i]
+
+
+def test_extorsion_disparait_en_population():
+    """Et pourtant elle s'éteint : elle vit de partenaires qu'elle ruine."""
+    pool = S.pool_moderne()
+    noms, A = matrice_gains(pool, graine=3, tours=200, repetitions=6)
+    parts = evolution(noms, A, generations=3000)
+    assert parts["Extorsion (ZD, x2)"] < 1e-3
+    assert parts["Toujours trahir"] < 1e-3
+
+
+# --------------------------------------------------------------------------- #
+# Le tournoi
+# --------------------------------------------------------------------------- #
+def test_les_gentilles_passent_devant_les_autres():
+    """Le seul résultat de l'expérience 1 qui résiste au changement de plateau."""
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    profs = P.profils(res, [s.nom for s in S.pool_classique()])
+    gentilles = [p.nom for p in profs if p.gentillesse > 0.99]
+    autres = [p.nom for p in profs if p.gentillesse <= 0.99]
+    assert gentilles and autres
+    assert (min(res.moyennes[n] for n in gentilles)
+            > max(res.moyennes[n] for n in autres))
+
+
+def test_donnant_donnant_ne_gagne_pas_ce_plateau():
+    """Pour que personne ne lise le dépôt comme une réplication de 1980."""
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    assert res.rang("Donnant-donnant") > 1
+
+
+def test_deterministe_a_graine_fixee():
+    a = tournoi(S.pool_classique(), graine=7, bruit=0.05)
+    b = tournoi(S.pool_classique(), graine=7, bruit=0.05)
+    assert a.classement() == b.classement()
+
+
+def test_noms_uniques_exiges():
+    with pytest.raises(ValueError):
+        tournoi([S.donnant_donnant(), S.donnant_donnant()])
+
+
+def test_longueur_tiree_evite_la_recurrence():
+    """Les durées varient : sinon trahir au dernier tour serait dominant."""
+    al = random.Random(1)
+    longueurs = {len(duel(S.donnant_donnant(), S.ToujoursCooperer(), al,
+                          tours=50).joues_a) for _ in range(30)}
+    assert len(longueurs) > 5
+
+
+# --------------------------------------------------------------------------- #
+# La mesure
+# --------------------------------------------------------------------------- #
+def test_le_retablissement_ne_depend_pas_du_bruit():
+    """Une mesure bien posée est une propriété de la stratégie.
+
+    C'est ce test qui a validé la troisième version de `_delais` : les deux
+    premières donnaient un chiffre qui variait du simple au triple selon le
+    niveau de bruit, parce qu'elles mesuraient tantôt la chance, tantôt un
+    biais de survie.
+    """
+    parts = []
+    for bruit in (0.02, 0.10):
+        res = tournoi(S.pool_classique(), graine=2, bruit=bruit, repetitions=60)
+        parts.append(P.entre_soi(res, "Donnant-donnant")["part_non_reparee"])
+    assert abs(parts[0] - parts[1]) < 0.12, parts
+
+
+def test_entre_soi_separe_pavlov_de_donnant_donnant():
+    """La mesure tous adversaires confondus les confondait à 55% chacun."""
+    res = tournoi(S.pool_classique(), graine=2, bruit=0.05, repetitions=60)
+    dd = P.entre_soi(res, "Donnant-donnant")["part_non_reparee"]
+    pv = P.entre_soi(res, "Pavlov")["part_non_reparee"]
+    assert dd > 0.5 and pv < 0.05, (dd, pv)
+
+
+def test_sortie_de_spirale_distingue_les_indulgences():
+    """« Indulgent » recouvrait deux gestes : rendre, et reprendre."""
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.05)
+    assert P.indulgence(res, "Donnant-donnant") > 0.9
+    assert P.sortie_de_spirale(res, "Donnant-donnant") < 0.1
+    assert P.sortie_de_spirale(res, "Pavlov") > 0.9
+
+
+def test_toujours_cooperer_na_pas_de_riposte():
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    assert P.riposte(res, "Toujours coopérer") == 0.0
+    assert P.riposte(res, "Donnant-donnant") == 1.0
+
+
+def test_aleatoire_est_illisible():
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    assert P.lisibilite(res, "Aléatoire") < 0.6
+    assert P.lisibilite(res, "Donnant-donnant") > 0.95
+
+
+# --------------------------------------------------------------------------- #
+# La coalition
+# --------------------------------------------------------------------------- #
+def test_la_coalition_se_reconnait():
+    recolteur, sacrifie = S.Equipe(True), S.Equipe(False)
+    sig = list(S.Equipe.SIGNATURE)
+    assert recolteur.jouer(sig, sig, alea()) == S.TRAHIR, "il récolte"
+    assert sacrifie.jouer(sig, sig, alea()) == S.COOP, "il se sacrifie"
+    etranger = [S.COOP] * len(sig)
+    assert recolteur.jouer(sig, etranger, alea()) == S.TRAHIR
+    assert sacrifie.jouer(sig, etranger, alea()) == S.TRAHIR, "pas de cadeau"
+
+
+def test_la_coalition_place_son_recolteur_premier():
+    pool = S.pool_classique()
+    r = S.Equipe(True)
+    r.nom = "Coalition (récolteur)"
+    pool.append(r)
+    for n in range(8):
+        s = S.Equipe(False)
+        s.nom = f"Coalition (sacrifié {n + 1})"
+        pool.append(s)
+    res = tournoi(pool, graine=1, bruit=0.0)
+    assert res.rang("Coalition (récolteur)") == 1
+    assert res.rang("Donnant-donnant") > 5, "le plateau a changé sous ses pieds"
