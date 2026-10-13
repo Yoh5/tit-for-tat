@@ -7,8 +7,10 @@ Donnant-donnant l'a gagné, et c'est donc la meilleure réponse au conflit. »*
 La première partie est vraie. Les deux autres ne tiennent pas, et ce dépôt
 permet de le voir soi-même plutôt que de me croire.
 
+![Un seul accident : deux copies de la même stratégie, un coup qui dérape au tour 1. Donnant-donnant alterne sans jamais retomber en phase ; Pavlov revient au tour 3.](figures/echo.png)
+
 ```
-python experiences.py              # les quatre expériences
+python experiences.py              # les six expériences
 python -m pytest test_tournoi.py -q   # 43 tests
 python figures.py                     # les trois figures, calculées depuis le code
 ```
@@ -56,6 +58,8 @@ qu'une stratégie qui réussit finit entourée d'elle-même :
 | Rancunier | **100 %** | jamais |
 
 *(fenêtre de 10 tours sans nouvel accident ; stable de 1 % à 10 % de bruit)*
+
+![Part des accidents après lesquels une paire de clones ne retrouve pas la coopération : 0 % pour Pavlov et Donnant-donnant x2, 73 % pour Donnant-donnant, 100 % pour Rancunier.](figures/retablissement.png)
 
 **Deux donnant-donnant ne se relèvent pas de leur propre accident dans trois cas
 sur quatre.** Le mécanisme est un écho : A dérape, B riposte, A riposte à la
@@ -161,6 +165,8 @@ Ce qui bouge, c'est le **coût de ne jamais pardonner**, et il n'est pas monoton
 | ce qu'on perd | 2,3 % | 6,8 % | **7,9 %** | **8,0 %** | 6,7 % | 5,6 % | 3,6 % | 1,8 % | −0,1 % | 0,0 % |
 
 *(moyennes sur 16 graines, ± 1,0 à 1,4 point)*
+
+![Ce qu'on perd à ne jamais pardonner selon la fréquence des accidents : une bosse qui culmine à 8 % vers 1-2 % de bruit et s'annule au-delà de 20 %.](figures/cout-du-pardon.png)
 
 Le mécanisme : à 1 % de bruit, un accident est rare mais il tue définitivement
 une longue relation — on perd tout le reste de la partie. À 20 %, plus personne
@@ -269,4 +275,4 @@ remonte par récurrence. Le bruit implémenté dans les expériences est celui
 d'**exécution** ; `tournoi.duel(..., perception=True)` propose l'autre, où les
 deux joueurs ont des historiques différents et ne peuvent pas le savoir.
 
-Licence : Apache 2.0.
+Licence : Apache 2.0 — voir `LICENSE`.
