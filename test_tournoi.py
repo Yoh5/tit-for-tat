@@ -336,3 +336,79 @@ def test_pavlov_paie_un_tour_de_plus_sous_malentendu():
         delais[perception] = P.entre_soi(res, "Pavlov")["delai_moyen"]
     assert delais[True] > delais[False]
     assert delais[True] - delais[False] == pytest.approx(1.0, abs=0.3), delais
+
+
+# --------------------------------------------------------------------------- #
+# Le pardon : ce qui bouge n'est pas ce qu'on croyait
+# --------------------------------------------------------------------------- #
+import experiences as E
+
+
+def _cout(bruit: float, graines: int = 6) -> float:
+    """Écart, en %, entre le meilleur taux de pardon et ne jamais pardonner."""
+    base, _ = E._gain(0.0, bruit, graines)
+    top = max(E._gain(g, bruit, graines)[0] for g in (0.10, 0.20))
+    return (top / base - 1) * 100
+
+
+def test_ne_jamais_pardonner_coute_quand_le_bruit_est_faible():
+    """Le résultat de l'expérience 6, dans sa forme la plus simple."""
+    assert _cout(0.01) > 3.0
+
+
+def test_le_cout_du_non_pardon_sannule_a_fort_bruit():
+    """Au-delà de 20%, plus personne ne tient une coopération : il n'y a plus
+    de relation à sauver, donc le pardon ne rapporte plus rien."""
+    assert _cout(0.25) < 2.0
+
+
+def test_le_cout_est_plus_fort_a_faible_bruit_qua_fort_bruit():
+    """L'affirmation centrale, et elle est contre-intuitive : le pardon rapporte
+    le plus quand les accidents sont RARES."""
+    faible, fort = _cout(0.015), _cout(0.25)
+    assert faible > fort + 2.0, (faible, fort)
+
+
+def test_tout_pardonner_est_aussi_mauvais():
+    """L'optimum est intérieur : sans exploiteurs dans le plateau, il serait
+    trivialement 1, et l'expérience ne dirait rien."""
+    partout = E._gain(1.0, 0.02, 6)[0]
+    milieu = E._gain(0.20, 0.02, 6)[0]
+    assert milieu > partout
+
+
+def test_le_plateau_garde_ses_exploiteurs():
+    noms = {s.nom for s in E._pool_avec_pardon(0.2)}
+    assert "Toujours trahir" in noms and "Sondeur (Joss)" in noms
+    assert "CANDIDAT" in noms
+    assert sum(n.startswith("Donnant-donnant g") for n in noms) == 0
+
+
+def test_deterministe_entre_processus():
+    """Deux processus avec des sels de hachage différents doivent s'accorder.
+
+    C'est le test qui aurait attrapé le bug : `matrice_gains` tirait sa graine
+    de `hash((graine, "M", i, j, rep))`, et le hachage des chaînes est salé au
+    démarrage de chaque processus. Un test dans un seul processus ne peut pas
+    le voir — il faut en lancer deux.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import strategies as S;"
+        "from tournoi import matrice_gains;"
+        "n, A = matrice_gains([S.extorsion_zd(), S.donnant_donnant()],"
+        " graine=3, tours=120, repetitions=4);"
+        "print(round(A[0][1], 9), round(A[1][0], 9))"
+    )
+    sorties = set()
+    for sel in ("0", "1", "12345"):
+        env = {**os.environ, "PYTHONHASHSEED": sel}
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                           text=True, cwd=os.path.dirname(__file__) or ".",
+                           env=env, timeout=120)
+        assert r.returncode == 0, r.stderr
+        sorties.add(r.stdout.strip())
+    assert len(sorties) == 1, f"résultats divergents selon le sel : {sorties}"

@@ -256,8 +256,108 @@ def figure_barres() -> Path:
     return chemin
 
 
+def figure_cout() -> Path:
+    """Le coût de ne jamais pardonner, en fonction du bruit.
+
+    La courbe est le résultat de l'expérience 6, et sa forme est tout : un pic
+    vers 1-2 % puis une décrue jusqu'à zéro. Les barres d'erreur y sont parce
+    que sans elles, un lecteur lirait une courbe lisse là où il y a un nuage —
+    et c'est précisément l'erreur que la première version de l'expérience a
+    faite sur l'emplacement de l'optimum.
+    """
+    import experiences as E
+
+    points = []
+    for b in E.BRUITS_FINS:
+        base, eb = E._gain(0.0, b, 16)
+        top, et = max((E._gain(g, b, 16) for g in (0.10, 0.20, 0.30)),
+                      key=lambda r: r[0])
+        ecart = (top / base - 1) * 100 if base else 0.0
+        err = (((et / base) ** 2 + (top * eb / base ** 2) ** 2) ** 0.5 * 100
+               if base else 0.0)
+        points.append((b, ecart, err))
+
+    L, H = 1600, 1000
+    img = Image.new("RGB", (L, H), SURFACE)
+    d = ImageDraw.Draw(img)
+    ecrire(d, (70, 52), "Quand le pardon rapporte", GRAS(58), ENCRE)
+    ecrire(d, (70, 126),
+           "Ce qu'on perd à ne jamais pardonner, selon la fréquence des "
+           "accidents.", NORMAL(28), ENCRE_2)
+    ecrire(d, (70, 166),
+           "Gain d'un donnant-donnant qui pardonne au mieux, contre un qui ne "
+           "pardonne jamais. 16 graines.", NORMAL(24), ENCRE_3)
+
+    gx, gy = 150, 760
+    gl, gh = L - 330, 500
+    haut = 10.0  # % en haut de l'axe
+
+    def px(b: float) -> float:
+        """Axe des bruits en racine : sans ça, tout le résultat se tasse à
+        gauche et la figure ne montre rien."""
+        return gx + gl * (b / 0.30) ** 0.5
+
+    def py(v: float) -> float:
+        return gy - gh * (v / haut)
+
+    for v in range(0, 11, 2):
+        y = py(v)
+        d.line([(gx, y), (gx + gl, y)], fill=(48, 48, 46), width=1)
+        ecrire(d, (gx - 18, y - 11), f"{v}%", NORMAL(22), ENCRE_3, droite=True)
+    d.line([(gx, py(0)), (gx + gl, py(0))], fill=ENCRE_3, width=2)
+
+    for b, _, _ in points:
+        x = px(b)
+        ecrire(d, (x, gy + 18), f"{b:.1%}".replace(".0", ""), NORMAL(21),
+               ENCRE_3, centre=True)
+
+    # Le plateau se dessine EN PREMIER : posé après, son aplat recouvrait la
+    # courbe qu'il est censé commenter. Le sommet est une bande, pas un point —
+    # plusieurs niveaux de bruit y sont indistinguables compte tenu des barres
+    # d'erreur, et désigner un argmax unique serait l'erreur que ces barres
+    # servent justement à éviter.
+    bp, bv, be = max(points, key=lambda r: r[1])
+    sommet = [(b, v) for b, v, _ in points if v >= bv - 2 * be]
+    b0, b1 = sommet[0][0], sommet[-1][0]
+    x0, x1 = px(b0), px(b1)
+    d.rectangle([x0, py(haut) + 6, x1, py(0)], fill=(42, 38, 38))
+    for x in (x0, x1):
+        d.line([(x, py(haut) + 6), (x, py(0))], fill=(96, 54, 54), width=2)
+
+    # L'aire sous la courbe, puis la courbe, puis les barres d'erreur.
+    aire = [(px(b), py(max(0.0, v))) for b, v, _ in points]
+    d.polygon([(gx, py(0))] + aire + [(px(points[-1][0]), py(0))],
+              fill=(30, 46, 66))
+    d.line([(px(b), py(v)) for b, v, _ in points], fill=ACCENT, width=5,
+           joint="curve")
+    for b, v, e in points:
+        x, y = px(b), py(v)
+        d.line([(x, py(v - e)), (x, py(v + e))], fill=ENCRE_3, width=2)
+        d.ellipse([x - 7, y - 7, x + 7, y + 7], fill=ACCENT)
+
+    ecrire(d, ((x0 + x1) / 2, py(haut) - 40),
+           f"sommet indistinguable : {bv:.0f} % entre "
+           f"{b0:.1%} et {b1:.0%}".replace(".0%", "%"),
+           GRAS(26), CRITIQUE, centre=True)
+
+    ecrire(d, (gx + gl, gy + 58), "fréquence des accidents", NORMAL(24),
+           ENCRE_3, droite=True)
+    ecrire(d, (70, H - 130),
+           "Le régime dangereux est celui qui a l'air fiable : les accidents y "
+           "sont assez rares pour qu'on", NORMAL(27), ENCRE_2)
+    ecrire(d, (70, H - 94),
+           "ne prévoie pas de reprise, et assez définitifs pour que chacun "
+           "coûte une relation entière.", NORMAL(27), ENCRE_2)
+    ecrire(d, (70, H - 48), "github.com/Yoh5/tit-for-tat", MONO(22), ENCRE_3)
+
+    SORTIE.mkdir(parents=True, exist_ok=True)
+    chemin = SORTIE / "cout-du-pardon.png"
+    img.save(chemin, optimize=True)
+    return chemin
+
+
 def main() -> int:
-    for chemin in (figure_echo(), figure_barres()):
+    for chemin in (figure_echo(), figure_barres(), figure_cout()):
         ko = chemin.stat().st_size / 1024
         print(f"ecrit : figures/{chemin.name}  ({ko:.0f} Ko)")
     return 0

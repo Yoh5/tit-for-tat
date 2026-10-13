@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Dict, List
+from statistics import mean, stdev
+from typing import Any, Dict, List, Tuple
 
 import proprietes as P
 import strategies as S
@@ -314,16 +315,130 @@ def experience_5(graine: int = 1) -> Dict[str, Any]:
             "classement_perception": pe.classement()[:3]}
 
 
+#: Taux de pardon balayés. Resserrés autour de l'optimum, étalés ailleurs.
+PARDONS = (0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.33, 0.50, 0.75, 1.0)
+
+#: Niveaux de bruit, resserrés en bas : le résultat de l'expérience 6 vit entre
+#: 0,5 % et 3 %, et un échantillonnage par pas de 5 % le manquerait entièrement.
+BRUITS_FINS = (0.0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.20, 0.30)
+
+
+def _pool_avec_pardon(g: float) -> List[S.Strategie]:
+    """Le plateau classique où la stratégie généreuse prend le taux `g`.
+
+    Le plateau **garde ses exploiteurs** — Toujours trahir, Aléatoire, le
+    Sondeur. Sans eux l'arbitrage disparaît : pardonner serait gratuit et
+    l'optimum vaudrait trivialement 1.
+    """
+    base = [s for s in S.pool_classique()
+            if not s.nom.startswith("Donnant-donnant g")]
+    gt = S.donnant_donnant_genereux(g)
+    gt.nom = "CANDIDAT"
+    return base + [gt]
+
+
+def _gain(g: float, bruit: float, graines: int) -> Tuple[float, float]:
+    """Gain moyen du candidat, et erreur-type de cette moyenne.
+
+    L'erreur-type n'est pas décorative : sans elle, on lit un écart de 0,004
+    comme un déplacement d'optimum. C'est exactement ce que la première version
+    de cette expérience a fait.
+    """
+    v = [tournoi(_pool_avec_pardon(g), graine=s, tours=120, repetitions=10,
+                 bruit=bruit).moyennes["CANDIDAT"]
+         for s in range(1, graines + 1)]
+    return mean(v), (stdev(v) / len(v) ** 0.5 if len(v) > 1 else 0.0)
+
+
+def experience_6(graine: int = 1, graines: int = 16) -> Dict[str, Any]:
+    """À quel taux pardonner — et surtout, quand est-ce que ça compte ?
+
+    Deux questions, et c'est la seconde qui donne le résultat.
+
+    **L'hypothèse de départ était qu'il faut pardonner d'autant plus que le
+    bruit est fort. Elle est fausse.** L'optimum reste autour de 0,20 à tous les
+    niveaux, et la bande indistinguable du meilleur est bien trop large pour
+    qu'un argmax veuille dire quelque chose.
+
+    Ce qui bouge, c'est le **coût de ne pas pardonner**, et il n'est pas
+    monotone : il culmine vers 1 à 2 % de bruit et s'annule au-delà de 20 %.
+    """
+    print("\n" + TRAIT)
+    print("6. QUAND LE PARDON COMPTE — un coût qui culmine là où on l'attend pas")
+    print(TRAIT)
+    print(f"\n  Donnant-donnant qui pardonne au taux g, dans un plateau qui")
+    print(f"  garde ses exploiteurs. Moyennes sur {graines} graines.\n")
+
+    print("  a) L'optimum se déplace-t-il avec le bruit ?\n")
+    repere = (0.0, 0.01, 0.05, 0.10)
+    print(f"  {'g':>6} " + " ".join(f"{b:>8.0%}" for b in repere))
+    table: Dict[float, List[float]] = {}
+    erreurs: Dict[float, List[float]] = {}
+    for g in PARDONS:
+        paires = [_gain(g, b, graines) for b in repere]
+        table[g] = [m for m, _ in paires]
+        erreurs[g] = [e for _, e in paires]
+        print(f"  {g:>6.2f} " + " ".join(f"{m:>8.3f}" for m in table[g]))
+
+    optima = []
+    for i, b in enumerate(repere):
+        meilleur = max(PARDONS, key=lambda g: table[g][i])
+        marge = 2 * max(erreurs[g][i] for g in PARDONS)
+        bande = [g for g in PARDONS if table[g][i] >= table[meilleur][i] - marge]
+        optima.append({"bruit": b, "argmax": meilleur,
+                       "bande": [min(bande), max(bande)]})
+        print(f"  bruit {b:>5.0%} : meilleur g = {meilleur:.2f}, bande "
+              f"indistinguable [{min(bande):.2f}, {max(bande):.2f}]")
+
+    print("\n  => L'optimum ne bouge pas. L'hypothèse de départ n'est pas")
+    print("     soutenue, et la bande est trop large pour qu'un argmax compte.")
+    print("     Le 1/3 de Nowak et Sigmund est dedans, un peu au-dessus.")
+
+    print("\n  b) Alors qu'est-ce qui bouge ? LE COÛT DE NE JAMAIS PARDONNER.\n")
+    print(f"  {'bruit':>7} {'g=0':>8} {'meilleur':>9} {'écart':>8} {'±':>7}")
+    courbe = []
+    for b in BRUITS_FINS:
+        base, eb = _gain(0.0, b, graines)
+        g_etoile, top, et = max(((g, *_gain(g, b, graines))
+                                 for g in (0.10, 0.20, 0.30)),
+                                key=lambda r: r[1])
+        ecart = (top / base - 1) * 100 if base else 0.0
+        err = (((et / base) ** 2 + (top * eb / base ** 2) ** 2) ** 0.5 * 100
+               if base else 0.0)
+        print(f"  {b:>7.1%} {base:>8.3f} {top:>9.3f} {ecart:>7.1f}% {err:>6.1f}%")
+        courbe.append({"bruit": b, "gain_sans_pardon": round(base, 4),
+                       "gain_optimal": round(top, 4),
+                       "ecart_pct": round(ecart, 2),
+                       "erreur_pct": round(err, 2), "g_etoile": g_etoile})
+
+    pic = max(courbe, key=lambda r: r["ecart_pct"])
+    print(f"\n  => Le coût culmine à {pic['ecart_pct']:.1f}% vers "
+          f"{pic['bruit']:.1%} de bruit, et s'annule au-delà de 20%.")
+    print("\n  LE PARDON RAPPORTE LE PLUS QUAND LES ACCIDENTS SONT RARES.")
+    print("\n  Le mécanisme : à 1% de bruit, un accident est rare mais il tue")
+    print("  définitivement une longue relation, et on perd tout le reste de la")
+    print("  partie. À 20%, plus personne ne tient une coopération de toute")
+    print("  façon — il n'y a plus de relation à perdre, et le bruit suivant")
+    print("  casse l'écho tout seul.")
+    print("\n  Le régime dangereux est donc celui qui a l'air fiable : assez")
+    print("  rare pour qu'on ne prévoie pas de reprise, assez définitif pour")
+    print("  que chaque accident coûte une relation entière.")
+    return {"table_optimum": {f"{g:.2f}": [round(v, 4) for v in table[g]]
+                              for g in PARDONS},
+            "repere": list(repere), "optima": optima, "courbe_cout": courbe,
+            "pic": pic, "graines": graines}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4, 5))
+    ap.add_argument("--une", type=int, choices=(1, 2, 3, 4, 5, 6))
     ap.add_argument("--graine", type=int, default=1)
     ap.add_argument("--json")
     args = ap.parse_args()
 
     faire = {1: experience_1, 2: experience_2, 3: experience_3,
-             4: experience_4, 5: experience_5}
-    choisies = [args.une] if args.une else [1, 2, 3, 4, 5]
+             4: experience_4, 5: experience_5, 6: experience_6}
+    choisies = [args.une] if args.une else [1, 2, 3, 4, 5, 6]
     out = {f"experience_{k}": faire[k](args.graine) for k in choisies}
 
     if args.json:

@@ -9,8 +9,8 @@ permet de le voir soi-même plutôt que de me croire.
 
 ```
 python experiences.py              # les quatre expériences
-python -m pytest test_tournoi.py -q   # 37 tests
-python figures.py                     # les deux figures, calculées depuis le code
+python -m pytest test_tournoi.py -q   # 43 tests
+python figures.py                     # les trois figures, calculées depuis le code
 ```
 
 Aucune dépendance en dehors de la bibliothèque standard. Déterministe à graine
@@ -141,6 +141,41 @@ d'accident ne se déclenchait jamais, et la fonction rendait un **échantillon v
 comme s'il valait zéro**. `Duel` garde maintenant aussi ce que chaque joueur a
 *lu*, et une mesure sans échantillon rend `None`, jamais 0.
 
+## 6. Le pardon rapporte le plus quand les accidents sont rares
+
+Dernière question, et la seule dont la réponse m'a surpris : **à quel taux faut-il
+pardonner ?** On fait varier le taux `g` d'un donnant-donnant généreux, dans un
+plateau qui garde ses exploiteurs — sans eux, pardonner serait gratuit et
+l'optimum vaudrait trivialement 1.
+
+L'hypothèse de départ était qu'il faut pardonner d'autant plus que le bruit est
+fort. **Elle est fausse.** L'optimum reste autour de 0,20 à tous les niveaux, et
+la bande indistinguable du meilleur va de 0,05 à 0,50 — bien trop large pour
+qu'un argmax veuille dire quoi que ce soit. Le 1/3 de Nowak et Sigmund est dedans,
+un peu au-dessus.
+
+Ce qui bouge, c'est le **coût de ne jamais pardonner**, et il n'est pas monotone :
+
+| bruit | 0 % | 0,5 % | 1 % | 2 % | 3 % | 5 % | 8 % | 12 % | 20 % | 30 % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ce qu'on perd | 2,3 % | 6,8 % | **7,9 %** | **8,0 %** | 6,7 % | 5,6 % | 3,6 % | 1,8 % | −0,1 % | 0,0 % |
+
+*(moyennes sur 16 graines, ± 1,0 à 1,4 point)*
+
+Le mécanisme : à 1 % de bruit, un accident est rare mais il tue définitivement
+une longue relation — on perd tout le reste de la partie. À 20 %, plus personne
+ne tient une coopération de toute façon : il n'y a plus de relation à perdre, et
+le bruit suivant casse l'écho tout seul.
+
+> **Le régime dangereux est celui qui a l'air fiable.** Les accidents y sont assez
+> rares pour qu'on ne prévoie pas de reprise, et assez définitifs pour que chacun
+> coûte une relation entière.
+
+C'est la seule conclusion du dépôt qui se traduise directement en règle
+d'ingénierie, pour une politique de reprise entre deux services ou deux agents
+autonomes : un taux d'échec d'un pour cent est précisément celui où une politique
+qui ne pardonne pas coûte le plus cher.
+
 ---
 
 ## Ce que mesure le dépôt, et pourquoi c'est l'essentiel
@@ -181,6 +216,19 @@ aucune n'était le résultat :
 Cette platitude est la seule preuve que la mesure porte sur la stratégie et non
 sur les conditions. `test_le_retablissement_ne_depend_pas_du_bruit` la vérifie.
 
+### Et le déterminisme promis n'en était pas un
+
+Ce README annonçait « déterministe à graine fixée » alors que `matrice_gains`
+tirait sa graine de `hash((graine, "M", i, j, rep))`. **Le hachage des chaînes
+est salé au démarrage de chaque processus** : deux exécutions du même code
+donnaient des résultats différents.
+
+Le symptôme était propre à faire perdre une soirée — le test qui vérifie que
+l'extorsion bat donnant-donnant passait seul et échouait dans la suite complète,
+selon le sel tiré ce jour-là. Aucun test exécuté dans un seul processus ne peut
+voir ça. `test_deterministe_entre_processus` relance donc le calcul dans trois
+sous-processus avec des `PYTHONHASHSEED` différents et exige le même résultat.
+
 ---
 
 ## Les fichiers
@@ -191,8 +239,8 @@ sur les conditions. `test_le_retablissement_ne_depend_pas_du_bruit` la vérifie.
 | `tournoi.py` | duel, tournoi, les deux bruits, dynamique de réplication |
 | `proprietes.py` | les propriétés d'Axelrod comme mesures, et la cinquième |
 | `experiences.py` | les quatre expériences ; `--json` pour les chiffres |
-| `test_tournoi.py` | 37 tests, dont les trois affirmations centrales |
-| `figures.py` | les deux figures, recalculées à chaque exécution |
+| `test_tournoi.py` | 43 tests, dont les affirmations centrales et le déterminisme |
+| `figures.py` | les trois figures, recalculées à chaque exécution |
 
 ## Références
 

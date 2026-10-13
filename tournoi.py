@@ -78,6 +78,24 @@ class Duel:
                 or self.vus_b[t] != self.joues_a[t])
 
 
+def _graine(*parties: int) -> int:
+    """Une graine reproductible, construite sans passer par `hash`.
+
+    `hash()` d'un tuple contenant une chaîne est **salé par processus** : deux
+    exécutions du même code donnent des graines différentes. `matrice_gains`
+    utilisait `hash((graine, "M", i, j, rep))`, et n'était donc pas déterministe
+    d'une exécution à l'autre — alors que le README promet l'inverse.
+
+    Le symptôme était propre à rendre fou : le test qui vérifie que l'extorsion
+    bat donnant-donnant passait seul et échouait dans la suite complète, selon le
+    sel tiré au démarrage. `test_deterministe_entre_processus` le couvre.
+    """
+    n = 0
+    for p in parties:
+        n = n * 1_000_003 + int(p)
+    return n & 0xFFFFFFFF
+
+
 def longueur(alea: random.Random, tours: int) -> int:
     """Longueur tirée, d'espérance `tours`, minimum 1."""
     if tours <= 1:
@@ -182,7 +200,7 @@ def tournoi(pool: Sequence[Strategie], graine: int = 1, tours: int = 200,
         for rep in range(repetitions):
             # Une graine par (paire, répétition) : le bruit subi par une paire
             # ne dépend pas de l'ordre dans lequel on parcourt le tournoi.
-            alea = random.Random((graine, i, j, rep).__hash__())
+            alea = random.Random(_graine(graine, 0, i, j, rep))
             if i == j:
                 import copy
                 d = duel(a, copy.deepcopy(b), alea, tours, bruit, perception)
@@ -215,7 +233,10 @@ def matrice_gains(pool: Sequence[Strategie], graine: int = 1, tours: int = 200,
         for j in range(n):
             total = tour_total = 0.0
             for rep in range(repetitions):
-                alea = random.Random((graine, "M", i, j, rep).__hash__())
+                # Discriminant 1 (le tournoi utilise 0) : les deux ne doivent
+                # pas partager leurs tirages, mais tous deux doivent survivre à
+                # un changement de processus.
+                alea = random.Random(_graine(graine, 1, i, j, rep))
                 a = copy.deepcopy(pool[i])
                 b = copy.deepcopy(pool[j])
                 d = duel(a, b, alea, tours, bruit, perception)
