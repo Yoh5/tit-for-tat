@@ -11,19 +11,28 @@ permet de le voir soi-même plutôt que de me croire.
 
 ```
 python experiences.py              # les six expériences
-python -m pytest test_tournoi.py -q   # 43 tests
+python -m pytest test_tournoi.py -q   # 44 tests
 python figures.py                     # les trois figures, calculées depuis le code
 ```
 
-Aucune dépendance en dehors de la bibliothèque standard. Déterministe à graine
-fixée : les chiffres ci-dessous se reproduisent.
+Aucune dépendance en dehors de la bibliothèque standard, sauf Pillow pour les
+figures. Déterministe à graine fixée, **y compris d'un processus à l'autre** :
+les chiffres ci-dessous se reproduisent, et `verifier_readme.py` le vérifie —
+
+```
+python experiences.py --json resultats.json
+python verifier_readme.py
+```
+
+Si un chiffre de ce texte ne correspond plus au code, ce script le dit et sort
+en erreur. Il existe parce que le README a dérivé deux fois.
 
 ---
 
 ## 1. Sans bruit, ce qui gagne n'est pas une stratégie
 
-Sur notre plateau de neuf stratégies, **Rancunier arrive premier et
-Donnant-donnant sixième**. Ce n'est pas un démenti d'Axelrod : son tournoi de
+Sur notre plateau de neuf stratégies, **Donnant-donnant généreux arrive premier
+et Donnant-donnant quatrième**. Ce n'est pas un démenti d'Axelrod : son tournoi de
 1980 comptait quinze entrées précises que nous n'avons pas, et il a lui-même
 écrit que le classement dépendait du plateau. Sur douze graines différentes,
 trois stratégies se partagent la première place — **le vainqueur n'est même pas
@@ -32,8 +41,8 @@ stable.**
 Ce qui est stable, et que l'expérience vérifie par assertion :
 
 > **Les six stratégies qui ne trahissent jamais les premières terminent toutes
-> devant les trois autres.** La dernière des gentilles marque 2,506 par tour, la
-> première des autres 2,248. Les deux familles ne se recouvrent pas.
+> devant les trois autres.** La dernière des gentilles marque 2,420 par tour, la
+> première des autres 2,329. Les deux familles ne se recouvrent pas.
 
 Le trait gagnant n'est pas une stratégie, c'est de ne pas ouvrir les hostilités.
 « Donnant-donnant gagne » était vrai d'un plateau ; « ne trahis pas le premier »
@@ -50,11 +59,11 @@ qu'une stratégie qui réussit finit entourée d'elle-même :
 
 | stratégie | ne se relève pas de son propre accident | délai quand elle se relève |
 |---|---|---|
-| Donnant-donnant x2 | **0 %** | 1,2 tour |
-| Pavlov | **0 %** | 2,0 tours |
-| Donnant-donnant généreux | 1 à 2 % | 2,6 tours |
-| **Donnant-donnant** | **71 à 78 %** | 1 tour |
-| Sondeur (Joss) | 82 à 93 % | 1 tour |
+| Donnant-donnant x2 | **0 %** | 1,15 tour |
+| Pavlov | **0 %** | 1,95 tour |
+| Donnant-donnant généreux | 1 à 2 % | 2,9 tours |
+| **Donnant-donnant** | **76 à 79 %** | 1 tour |
+| Sondeur (Joss) | 81 à 94 % | 1 tour |
 | Rancunier | **100 %** | jamais |
 
 *(fenêtre de 10 tours sans nouvel accident ; stable de 1 % à 10 % de bruit)*
@@ -75,10 +84,11 @@ Trois stratégies s'en sortent toujours, et chacune autrement :
 - **pardonner** — rouvrir au hasard de temps en temps, ce qui suffit à casser
   l'écho (Donnant-donnant généreux, pardon 1/3).
 
-Sur douze graines, donnant-donnant ne gagne à **aucun** niveau de bruit. À 1 et
-2 %, c'est Donnant-donnant x2 (7 fois sur 12). À 5 et 10 %, Pavlov passe devant.
-À 20 %, la coopération ne vaut plus la peine et Rancunier et Toujours trahir se
-partagent la tête.
+Sur douze graines, donnant-donnant ne gagne à **aucun** niveau de bruit, et son
+rang moyen ne bouge presque pas (4,3 à 4,8). Entre 1 et 10 %, la tête se partage
+entre Donnant-donnant x2 et Pavlov, les deux stratégies qui encaissent un
+accident. À 20 %, la coopération ne vaut plus la peine et Toujours trahir prend
+la première place.
 
 Ce n'est pas une trouvaille : Nowak et Sigmund l'ont publié en 1992 et 1993. Mais
 c'est la moitié de l'histoire qui ne survit presque jamais à la vulgarisation.
@@ -91,13 +101,14 @@ score se met alors à servir le gain de l'extorqueur.
 
 Mesuré ici, sans faire confiance à la dérivation :
 
-- extorsion contre donnant-donnant : **1,139 contre 1,086** — elle gagne ;
-- extorsion contre un coopérateur naïf : **3,565 contre 2,286** — elle rançonne.
+- extorsion contre donnant-donnant : **1,145 contre 1,087** — elle gagne ;
+- extorsion contre un coopérateur naïf : **3,444 contre 2,304** — elle rançonne.
 
 Et pourtant, dans une population qui évolue par dynamique de réplication,
 **l'extorsion s'éteint**, avec Toujours trahir, Aléatoire et le Sondeur. La
-population se stabilise sur les généreuses : Donnant-donnant généreux 15,4 %,
-Rancunier 15,3 %, la variante généreuse à déterminant nul 15,2 %.
+population se stabilise sur les généreuses : Donnant-donnant généreux et la
+variante généreuse à déterminant nul à 15,7 % chacune, puis Rancunier 14,7 % et
+Donnant-donnant x2 14,5 %.
 
 L'extorqueur vit de partenaires qu'il ruine. Sa victoire en duel ne survit pas au
 fait que la population change — c'est le résultat de Stewart et Plotkin (2013).
@@ -113,9 +124,9 @@ Reproduit ici avec un récolteur et huit sacrifiés :
 
 | | gain par tour | rang |
 |---|---|---|
-| Coalition (récolteur) | **2,972** | **1** |
-| Coalition (sacrifiés, moyenne) | 2,446 | dispersés |
-| Donnant-donnant | — | **12** |
+| Coalition (récolteur) | **3,268** | **1** |
+| Coalition (sacrifiés, moyenne) | 2,369 | dispersés |
+| Donnant-donnant | — | **10** |
 
 Un classement individuel ne dit donc pas quelle stratégie est bonne : il dit qui
 a été le mieux servi par les règles d'inscription. La question « quelle est la
@@ -162,11 +173,14 @@ Ce qui bouge, c'est le **coût de ne jamais pardonner**, et il n'est pas monoton
 
 | bruit | 0 % | 0,5 % | 1 % | 2 % | 3 % | 5 % | 8 % | 12 % | 20 % | 30 % |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ce qu'on perd | 2,3 % | 6,8 % | **7,9 %** | **8,0 %** | 6,7 % | 5,6 % | 3,6 % | 1,8 % | −0,1 % | 0,0 % |
+| ce qu'on perd | 2,7 % | **8,2 %** | **8,5 %** | **8,4 %** | **7,4 %** | **6,5 %** | 4,2 % | 2,4 % | 0,7 % | -0,2 % |
 
 *(moyennes sur 16 graines, ± 1,0 à 1,4 point)*
 
 ![Ce qu'on perd à ne jamais pardonner selon la fréquence des accidents : une bosse qui culmine à 8 % vers 1-2 % de bruit et s'annule au-delà de 20 %.](figures/cout-du-pardon.png)
+
+Le gras marque les niveaux indistinguables du sommet compte tenu des barres
+d'erreur : le maximum est une **bande**, de 0,5 % à 5 %, pas un point.
 
 Le mécanisme : à 1 % de bruit, un accident est rare mais il tue définitivement
 une longue relation — on perd tout le reste de la partie. À 20 %, plus personne
@@ -245,7 +259,8 @@ sous-processus avec des `PYTHONHASHSEED` différents et exige le même résultat
 | `tournoi.py` | duel, tournoi, les deux bruits, dynamique de réplication |
 | `proprietes.py` | les propriétés d'Axelrod comme mesures, et la cinquième |
 | `experiences.py` | les quatre expériences ; `--json` pour les chiffres |
-| `test_tournoi.py` | 43 tests, dont les affirmations centrales et le déterminisme |
+| `test_tournoi.py` | 44 tests, dont les affirmations centrales et le déterminisme |
+| `verifier_readme.py` | confronte chaque chiffre de ce README à ce que le code produit |
 | `figures.py` | les trois figures, recalculées à chaque exécution |
 
 ## Références

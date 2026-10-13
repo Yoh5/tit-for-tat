@@ -412,3 +412,40 @@ def test_deterministe_entre_processus():
         assert r.returncode == 0, r.stderr
         sorties.add(r.stdout.strip())
     assert len(sorties) == 1, f"résultats divergents selon le sel : {sorties}"
+
+
+def test_le_readme_ne_derive_pas_du_code():
+    """Les affirmations rapides du README, revérifiées à chaque exécution.
+
+    Le dépôt a cité deux fois des chiffres que le code ne produisait plus, la
+    seconde au moment de publier. Pour un dépôt dont l'argument est « ne me
+    croyez pas, relancez », c'est la pire erreur possible : un lecteur qui
+    relance et trouve autre chose ne peut pas savoir si le texte a dérivé ou si
+    la mesure est instable.
+
+    Ce test couvre ce qui se calcule en quelques secondes ; `verifier_readme.py`
+    couvre tout, y compris l'expérience 6, qui demande plusieurs minutes.
+    """
+    import pathlib
+    import verifier_readme as V
+
+    readme = V.normaliser(
+        (pathlib.Path(__file__).parent / "README.md").read_text(encoding="utf-8"))
+
+    res = tournoi(S.pool_classique(), graine=1, bruit=0.0)
+    profs = P.profils(res, [s.nom for s in S.pool_classique()])
+    gentilles = [p.nom for p in profs if p.gentillesse > 0.99]
+    autres = [p.nom for p in profs if p.gentillesse <= 0.99]
+    pire = min(res.moyennes[n] for n in gentilles)
+    meilleure = max(res.moyennes[n] for n in autres)
+    assert V.normaliser(f"La dernière des gentilles marque {V.fr(pire)} par tour") \
+        in readme
+    assert V.normaliser(f"première des autres {V.fr(meilleure)}") in readme
+
+    # Le délai du tableau vient du DERNIER niveau de bruit balayé par
+    # l'expérience 2, pas d'un niveau choisi ici : un contrôle qui mesure
+    # autrement que le texte ne contrôle rien.
+    bruite = tournoi(S.pool_classique(), graine=1, bruit=E.BRUITS[-1],
+                     repetitions=60)
+    pavlov = P.entre_soi(bruite, "Pavlov")["delai_moyen"]
+    assert V.normaliser(f"| Pavlov | **0 %** | {V.fr(pavlov, 2)} tour") in readme

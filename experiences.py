@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 from statistics import mean, stdev
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import proprietes as P
 import strategies as S
@@ -31,6 +31,21 @@ from tournoi import evolution, matrice_gains, tournoi
 BRUITS = (0.0, 0.01, 0.02, 0.05, 0.10)
 
 TRAIT = "-" * 78
+
+
+def _pct(v: Optional[float], largeur: int = 8) -> str:
+    """Un pourcentage, ou « n/d » quand la mesure n'a pas d'échantillon.
+
+    `entre_soi` rend `None` plutôt que zéro quand aucun accident n'a été
+    observé, et cette distinction ne doit pas se perdre à l'affichage : un
+    tableau qui imprime 0 % là où il n'a rien mesuré raconte exactement le
+    mensonge que ce choix de `None` servait à empêcher.
+    """
+    return f"{'n/d':>{largeur}}" if v is None else f"{v:>{largeur}.0%}"
+
+
+def _tours(v: Optional[float], largeur: int = 7) -> str:
+    return f"{'-':>{largeur}}" if v is None else f"{v:>{largeur - 1}.1f}t"
 
 
 def _classement(res, titre: str, montrer: int = 99) -> List[Dict[str, Any]]:
@@ -149,10 +164,11 @@ def experience_2(graine: int = 1, graines: int = 12) -> Dict[str, Any]:
         mesures = [P.entre_soi(cache[b], s.nom) for b in BRUITS[1:]]
         parts = [m["part_non_reparee"] for m in mesures]
         d = mesures[-1]["delai_moyen"]
-        print(f"  {s.nom:<32} " + " ".join(f"{p:>10.0%}" for p in parts) +
-              (f" {'jamais':>8}" if d != d else f" {d:>7.1f}t"))
-        mecanisme[s.nom] = {"parts_non_reparees": [round(p, 4) for p in parts],
-                            "delai_moyen": None if d != d else round(d, 2),
+        print(f"  {s.nom:<32} " + " ".join(_pct(p, 10) for p in parts) +
+              (f" {'jamais':>8}" if d is None else f" {d:>7.1f}t"))
+        mecanisme[s.nom] = {"parts_non_reparees": [None if p is None else round(p, 4)
+                                                   for p in parts],
+                            "delai_moyen": None if d is None else round(d, 2),
                             "echantillons": [m["echantillon"] for m in mesures]}
 
     print("\n  Le chiffre ne bouge pas avec le bruit : c'est une propriété de la")
@@ -280,20 +296,14 @@ def experience_5(graine: int = 1) -> Dict[str, Any]:
     pe = tournoi(S.pool_classique(), graine=graine, bruit=0.05, repetitions=60,
                  perception=True)
 
-    def pct(v):
-        return " n/d " if v is None else f"{v:>4.0%}"
-
-    def tours(v):
-        return "   - " if v is None else f"{v:>3.1f}t"
-
     print(f"  {'stratégie':<32} {'exécution':>10} {'délai':>7} "
           f"{'perception':>12} {'délai':>7}")
     compare = {}
     for s in S.pool_classique():
         a, b = P.entre_soi(ex, s.nom), P.entre_soi(pe, s.nom)
-        print(f"  {s.nom:<32} {pct(a['part_non_reparee']):>10} "
-              f"{tours(a['delai_moyen']):>7} {pct(b['part_non_reparee']):>12} "
-              f"{tours(b['delai_moyen']):>7}")
+        print(f"  {s.nom:<32} {_pct(a['part_non_reparee'], 10)} "
+              f"{_tours(a['delai_moyen'])} {_pct(b['part_non_reparee'], 12)} "
+              f"{_tours(b['delai_moyen'])}")
         compare[s.nom] = {"execution": a, "perception": b}
 
     print("\n  Les parts sont identiques à un point près. Le seul écart tient en")
