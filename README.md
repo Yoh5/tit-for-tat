@@ -27,6 +27,16 @@ python verifier_readme.py
 Si un chiffre de ce texte ne correspond plus au code, ce script le dit et sort
 en erreur. Il existe parce que le README a dérivé deux fois.
 
+Il accepte aussi un fichier extérieur, et n'y vérifie que les chiffres énoncés
+en prose — ceux qu'on recopie à la main dans un article ou une présentation :
+
+```
+python verifier_readme.py --aussi un-brouillon.md
+```
+
+Un garde-fou qui ne protège que le fichier le plus relu protège le moins exposé :
+la troisième dérive était dans un brouillon publiable, pas dans ce README.
+
 ---
 
 ## 1. Sans bruit, ce qui gagne n'est pas une stratégie
@@ -68,7 +78,7 @@ qu'une stratégie qui réussit finit entourée d'elle-même :
 
 *(fenêtre de 10 tours sans nouvel accident ; stable de 1 % à 10 % de bruit)*
 
-![Part des accidents après lesquels une paire de clones ne retrouve pas la coopération : 0 % pour Pavlov et Donnant-donnant x2, 73 % pour Donnant-donnant, 100 % pour Rancunier.](figures/retablissement.png)
+![Part des accidents après lesquels une paire de clones ne retrouve pas la coopération : 0 % pour Pavlov et Donnant-donnant x2, 76 à 79 % pour Donnant-donnant, 100 % pour Rancunier.](figures/retablissement.png)
 
 **Deux donnant-donnant ne se relèvent pas de leur propre accident dans trois cas
 sur quatre.** Le mécanisme est un écho : A dérape, B riposte, A riposte à la
